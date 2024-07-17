@@ -3649,7 +3649,12 @@ const isErrorLike_1 = __nccwpck_require__(196);
 const child_process_1 = __nccwpck_require__(81);
 const log_1 = __importDefault(__nccwpck_require__(853));
 async function post() {
-    await cleanupOrphanProcesses();
+    try {
+        await cleanupOrphanProcesses();
+    }
+    catch (error) {
+        log_1.default.trace(error);
+    }
     for (let i = 0; i <= 5; i++) {
         try {
             const { cacheDir, targetPath, cachePath } = (0, getVars_1.getVars)();
@@ -3672,7 +3677,11 @@ async function post() {
 function cleanupOrphanProcesses() {
     console.log("Cleaning up orphan processes...");
     var promise = new Promise((resolve, reject) => {
-        (0, child_process_1.exec)('Get-Process | Where-Object { $_.Parent -eq $null } | Stop-Process -Force', (error, stdout, stderr) => {
+        const command = `
+    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Get-Process | Where-Object { $_.Parent -eq $null -and $_.StartTime -gt (Get-Date).AddHours(-1) -and $_.UserName -eq $user } | ForEach-Object { Stop-Process -Id $_.Id -Force }
+    `;
+        (0, child_process_1.exec)(`powershell -Command "${command}"`, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Error terminating processes: ${error.message}`);
                 reject(error.message);

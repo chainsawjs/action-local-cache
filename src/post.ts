@@ -7,7 +7,11 @@ import { exec } from 'child_process'
 import log from './lib/log'
 
 async function post(): Promise<void> {
-  await cleanupOrphanProcesses();
+  try {
+    await cleanupOrphanProcesses();
+  } catch (error: unknown) {
+    log.trace(error);
+  }  
 
   for (let i = 0; i <= 5; i++) {
     try {
@@ -33,7 +37,12 @@ function cleanupOrphanProcesses() : Promise<void> {
   console.log("Cleaning up orphan processes...");
 
   var promise = new Promise<void>((resolve, reject) => {
-    exec('Get-Process | Where-Object { $_.Parent -eq $null } | Stop-Process -Force', (error, stdout, stderr) => {
+    const command = `
+    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Get-Process | Where-Object { $_.Parent -eq $null -and $_.StartTime -gt (Get-Date).AddHours(-1) -and $_.UserName -eq $user } | ForEach-Object { Stop-Process -Id $_.Id -Force }
+    `;
+
+    exec(`powershell -Command "${command}"`, (error, stdout, stderr) => {
         if (error) {
             console.error(`Error terminating processes: ${error.message}`);
             reject(error.message);
