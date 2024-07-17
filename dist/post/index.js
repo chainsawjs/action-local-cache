@@ -3646,17 +3646,51 @@ const core_1 = __nccwpck_require__(186);
 const io_1 = __nccwpck_require__(436);
 const getVars_1 = __nccwpck_require__(997);
 const isErrorLike_1 = __nccwpck_require__(196);
+const child_process_1 = __nccwpck_require__(81);
 const log_1 = __importDefault(__nccwpck_require__(853));
 async function post() {
-    try {
-        const { cacheDir, targetPath, cachePath } = (0, getVars_1.getVars)();
-        await (0, io_1.mkdirP)(cacheDir);
-        await (0, io_1.mv)(targetPath, cachePath, { force: true });
+    await cleanupOrphanProcesses();
+    for (let i = 0; i <= 5; i++) {
+        try {
+            const { cacheDir, targetPath, cachePath } = (0, getVars_1.getVars)();
+            await (0, io_1.mkdirP)(cacheDir);
+            await (0, io_1.mv)(targetPath, cachePath, { force: true });
+            break;
+        }
+        catch (error) {
+            log_1.default.trace(error);
+            if (i < 5) {
+                await delay(2000 * i);
+                continue;
+            }
+            (0, core_1.setFailed)((0, isErrorLike_1.isErrorLike)(error) ? error.message : `unknown error: ${error}`);
+        }
+        console.log('post');
     }
-    catch (error) {
-        log_1.default.trace(error);
-        (0, core_1.setFailed)((0, isErrorLike_1.isErrorLike)(error) ? error.message : `unknown error: ${error}`);
-    }
+}
+// Cleanup orphan processes in case one of them is holding on the cache directory
+function cleanupOrphanProcesses() {
+    console.log("Cleaning up orphan processes...");
+    var promise = new Promise((resolve, reject) => {
+        (0, child_process_1.exec)('Get-Process | Where-Object { $_.Parent -eq $null } | Stop-Process -Force', (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Error terminating processes: ${error.message}`);
+                reject(error.message);
+                return;
+            }
+            if (stderr) {
+                console.error(`Stderr: ${stderr}`);
+                reject(stderr);
+                return;
+            }
+            console.log(`Stdout: ${stdout}`);
+            resolve();
+        });
+    });
+    return promise;
+}
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 void post();
 
